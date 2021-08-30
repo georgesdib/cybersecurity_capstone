@@ -17,10 +17,10 @@ const connection = mysql.createConnection({
 // Initialize DB
 connection.query(
     `CREATE DATABASE IF NOT EXISTS \`nodelogin\` DEFAULT CHARACTER SET utf8 COLLATE utf8_general_ci;
-    USE \`nodelogin\`;
+    USE \`nodelogin\`
     
     CREATE TABLE IF NOT EXISTS \`accounts\` (
-      \`id\` int NOT NULL,
+      \`id\` int(11) NOT NULL,
       \`username\` varchar(50) NOT NULL,
       \`password\` varchar(255) NOT NULL,
       \`email\` varchar(100) NOT NULL
