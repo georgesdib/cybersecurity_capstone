@@ -64,20 +64,30 @@ app.post("/auth", function (request, response) {
   const username = request.body.username;
   const password = request.body.password;
   if (username && password) {
-    connection.query(
-      "SELECT * FROM accounts WHERE username = ? AND password = ?",
-      [username, password],
-      function (error, results, fields) {
-        if (results.length > 0) {
-          request.session.loggedin = true;
-          request.session.username = username;
-          response.redirect("/home");
-        } else {
-          response.send("Incorrect Username and/or Password!");
-        }
-        response.end();
+    connection.connect(function (err) {
+      if (err) {
+        return console.error("error: " + err.message);
       }
-    );
+      connection.query(
+        "SELECT * FROM accounts WHERE username = ? AND password = ?",
+        [username, password],
+        function (error, results, fields) {
+          if (results.length > 0) {
+            request.session.loggedin = true;
+            request.session.username = username;
+            response.redirect("/home");
+          } else {
+            response.send("Incorrect Username and/or Password!");
+          }
+          response.end();
+        }
+      );
+      connection.end(function (err) {
+        if (err) {
+          return console.log(err.message);
+        }
+      });
+    });
   } else {
     response.send("Please enter Username and Password!");
     response.end();
