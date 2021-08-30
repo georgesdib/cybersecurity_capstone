@@ -4,7 +4,7 @@ const session = require("express-session");
 const bodyParser = require("body-parser");
 const path = require("path");
 
-const PORT = process.env.PORT || 5000
+const PORT = process.env.PORT || 5000;
 
 // Establish DB connection
 const connection = mysql.createConnection({
@@ -14,23 +14,41 @@ const connection = mysql.createConnection({
   database: "heroku_1d16e292184721a",
 });
 
+// connect to the MySQL server
 // Initialize DB
-connection.query(
-    `CREATE DATABASE IF NOT EXISTS nodelogin DEFAULT CHARACTER SET utf8 COLLATE utf8_general_ci;
-    USE nodelogin
-    
-    CREATE TABLE IF NOT EXISTS accounts (
-      Id int,
-      Username varchar(50),
-      Password varchar(255),
-      Email varchar(100)
-    ) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8;
-    
-    INSERT INTO accounts (Id, Username, Password, Email) VALUES (1, 'test', 'test', 'test@test.com');
-    
-    ALTER TABLE \`accounts\` ADD PRIMARY KEY (\`id\`);
-    ALTER TABLE \`accounts\` MODIFY \`id\` int(11) NOT NULL AUTO_INCREMENT,AUTO_INCREMENT=2;`
-  );
+connection.connect(function (err) {
+  if (err) {
+    return console.error("error: " + err.message);
+  }
+
+  const createDb = `CREATE DATABASE IF NOT EXISTS nodelogin DEFAULT CHARACTER SET utf8 COLLATE utf8_general_ci;
+    USE nodelogin`;
+
+  connection.query(createDb, function (err, results, fields) {
+    if (err) {
+      console.log(err.message);
+    }
+  });
+
+  const createTable = `CREATE TABLE IF NOT EXISTS \`accounts\` (
+        \`id\` int(11) NOT NULL,
+        \`username\` varchar(50) NOT NULL,
+        \`password\` varchar(255) NOT NULL,
+        \`email\` varchar(100) NOT NULL
+      ) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8;`;
+
+  connection.query(createTable, function (err, results, fields) {
+    if (err) {
+      console.log(err.message);
+    }
+  });
+
+  connection.end(function (err) {
+    if (err) {
+      return console.log(err.message);
+    }
+  });
+});
 
 // Launch express server
 const app = express();
