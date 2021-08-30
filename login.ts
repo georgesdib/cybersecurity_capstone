@@ -21,15 +21,6 @@ connection.connect(function (err) {
     return console.error("error: " + err.message);
   }
 
-  const createDb = `CREATE DATABASE IF NOT EXISTS \`nodelogin\` DEFAULT CHARACTER SET utf8 COLLATE utf8_general_ci;
-    USE \`nodelogin\`;`;
-
-  connection.query(createDb, function (err, results, fields) {
-    if (err) {
-      console.log(err.message);
-    }
-  });
-
   const createTable = `CREATE TABLE IF NOT EXISTS \`accounts\` (
         \`id\` int(11) NOT NULL,
         \`username\` varchar(50) NOT NULL,
