@@ -14,31 +14,18 @@ const connection = mysql.createConnection({
   database: "heroku_1d16e292184721a",
 });
 
-// connect to the MySQL server
 // Initialize DB
-connection.connect(function (err) {
-  if (err) {
-    return console.error("error: " + err.message);
-  }
-
-  const createTable = `CREATE TABLE IF NOT EXISTS \`accounts\` (
+const createTable = `CREATE TABLE IF NOT EXISTS \`accounts\` (
         \`id\` int(11) NOT NULL,
         \`username\` varchar(50) NOT NULL,
         \`password\` varchar(255) NOT NULL,
         \`email\` varchar(100) NOT NULL
       ) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8;`;
 
-  connection.query(createTable, function (err, results, fields) {
-    if (err) {
-      console.log(err.message);
-    }
-  });
-
-  connection.end(function (err) {
-    if (err) {
-      return console.log(err.message);
-    }
-  });
+connection.query(createTable, function (err, results, fields) {
+  if (err) {
+    console.log(err.message);
+  }
 });
 
 // Launch express server
@@ -64,30 +51,20 @@ app.post("/auth", function (request, response) {
   const username = request.body.username;
   const password = request.body.password;
   if (username && password) {
-    connection.connect(function (err) {
-      if (err) {
-        return console.error("error: " + err.message);
+    connection.query(
+      "SELECT * FROM accounts WHERE username = ? AND password = ?",
+      [username, password],
+      function (error, results, fields) {
+        if (results.length > 0) {
+          request.session.loggedin = true;
+          request.session.username = username;
+          response.redirect("/home");
+        } else {
+          response.send("Incorrect Username and/or Password!");
+        }
+        response.end();
       }
-      connection.query(
-        "SELECT * FROM accounts WHERE username = ? AND password = ?",
-        [username, password],
-        function (error, results, fields) {
-          if (results.length > 0) {
-            request.session.loggedin = true;
-            request.session.username = username;
-            response.redirect("/home");
-          } else {
-            response.send("Incorrect Username and/or Password!");
-          }
-          response.end();
-        }
-      );
-      connection.end(function (err) {
-        if (err) {
-          return console.log(err.message);
-        }
-      });
-    });
+    );
   } else {
     response.send("Please enter Username and Password!");
     response.end();
