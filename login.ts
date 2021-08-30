@@ -4,6 +4,8 @@ const session = require("express-session");
 const bodyParser = require("body-parser");
 const path = require("path");
 
+const PORT = process.env.PORT || 5000
+
 // Establish DB connection
 const connection = mysql.createConnection({
   host: "us-cdbr-east-04.cleardb.com",
@@ -65,4 +67,4 @@ app.get("/home", function (request, response) {
   response.end();
 });
 
-app.listen(5000);
+app.listen(PORT);
