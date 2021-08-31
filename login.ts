@@ -4,14 +4,16 @@ const session = require("express-session");
 const bodyParser = require("body-parser");
 const path = require("path");
 
+require("dotenv").config({path: "./.env"});
+
 const PORT = process.env.PORT || 5000;
 
 // Establish DB connection
 const connection = mysql.createConnection({
-  host: "us-cdbr-east-04.cleardb.com",
-  user: "b487a85c65c9ba",
-  password: "c708f206",
-  database: "heroku_1d16e292184721a",
+  host: process.env.HOST,
+  user: process.env.USER,
+  password: process.env.PASSWORD,
+  database: process.env.DATABASE,
 });
 
 // Initialize DB
