@@ -11,10 +11,12 @@ const PORT = process.env.PORT || 5000;
 // Establish DB connection
 const connection = mysql.createConnection({
   host: process.env.HOST,
-  user: process.env.USER,
+  user: process.env.USERNAME,
   password: process.env.PASSWORD,
   database: process.env.DATABASE,
 });
+
+console.log(connection);
 
 // Initialize DB
 const createTable = `CREATE TABLE IF NOT EXISTS \`accounts\` (
