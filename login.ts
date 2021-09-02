@@ -16,6 +16,7 @@ const connection = mysql.createConnection({
   database: process.env.DATABASE,
 });
 
+// TODO remove that after deployment
 // Initialize DB
 const deleteTable = "DROP TABLE accounts";
 connection.query(deleteTable, function (err, results, fields) {
@@ -38,9 +39,10 @@ connection.query(createTable, function (err, results, fields) {
 // Launch express server
 const app = express();
 
+// TODO test better the cookie expiry
 app.use(
   session({
-    secret: "kjsbfkjsbjkvbwijfb",
+    secret: process.env.COOKIE_SECRET,
     resave: true,
     saveUninitialized: false,
     cookie: {
@@ -62,7 +64,7 @@ app.get("/", function (request, response) {
 app.post("/auth", function (request, response) {
   const username = request.body.username;
   const password = request.body.password;
-  if (username && password) {
+  if (username && password && isUserNameValid(username) && isPasswordValid(password)) {
     connection.query(
       "SELECT * FROM accounts WHERE username = ? AND password = ?",
       [username, password],
@@ -78,17 +80,28 @@ app.post("/auth", function (request, response) {
       }
     );
   } else {
-    response.send("Please enter Username and Password!");
+    response.send("Please enter a valid Username and Password!");
     response.end();
   }
 });
+
+function isPasswordValid(password: string): boolean {
+  const regex = new RegExp(
+    "^(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#$%^&*])(?=.{8,})"
+  );
+  return regex.test(password);
+}
+
+function isUserNameValid(username: string): boolean {
+  let regex = /^[a-zA-Z]+$/;
+  return regex.test(username);
+}
 
 // Handle register
 app.post("/register", function (request, response) {
   const username = request.body.username;
   // Validate username contains characters only
-  const regex = /^[a-zA-Z]+$/;
-  const onlyChar = regex.test(username);
+  const onlyChar = isUserNameValid(username);
   const password = request.body.password;
   if (!(username && password && username.length >= 1 && password.length >= 1)) {
     response.send("Please enter Username and Password!");
@@ -106,19 +119,28 @@ app.post("/register", function (request, response) {
           response.send("Username already exists, maybe you meant to login?");
           response.end();
         } else {
-          let query =
-            "INSERT INTO `accounts` (`username`, `password`) VALUES ('";
-          query += username + "', '" + password + "');";
-          connection.query(query, function (error, results) {
-            if (error) {
-              response.send("Error: " + error);
-            } else if (results) {
-              response.send("Username registered");
-            } else {
-              response.send("Failed to register!");
-            }
+          // Is password secure enough?
+          const passValid = isPasswordValid(password);
+          if (!passValid) {
+            response.send(`Password needs to be minimum 8 characters and contains at least
+                    1 lower case, 1 upper case, 1 number, and at least one special character from
+                    !@#$%^&* but no spaces`);
             response.end();
-          });
+          } else {
+            let query =
+              "INSERT INTO `accounts` (`username`, `password`) VALUES ('";
+            query += username + "', '" + password + "');";
+            connection.query(query, function (error, results) {
+              if (error) {
+                response.send("Error: " + error);
+              } else if (results) {
+                response.send("Username registered");
+              } else {
+                response.send("Failed to register!");
+              }
+              response.end();
+            });
+          }
         }
       }
     );
