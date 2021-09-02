@@ -3,10 +3,30 @@ const express = require("express");
 const session = require("express-session");
 const bodyParser = require("body-parser");
 const path = require("path");
+const crypto = require("crypto");
 
 require("dotenv").config({ path: "./.env" });
 
 const PORT = process.env.PORT || 5000;
+
+function isPasswordValid(password) {
+  const regex = new RegExp(
+    "^(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#$%^&*])(?=.{8,})"
+  );
+  return regex.test(password);
+}
+
+function isUserNameValid(username) {
+  let regex = /^[a-zA-Z]+$/;
+  return regex.test(username);
+}
+
+function hashPassword(username, password) {
+  return crypto
+    .createHash("sha512")
+    .update(username + password)
+    .digest("hex");
+}
 
 // Establish DB connection
 const connection = mysql.createConnection({
@@ -27,7 +47,7 @@ connection.query(deleteTable, function (err, results, fields) {
 
 const createTable = `CREATE TABLE \`accounts\` (
         \`username\` varchar(50) NOT NULL,
-        \`password\` varchar(255) NOT NULL
+        \`password\` varchar(512) NOT NULL
       ) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8;`;
 
 connection.query(createTable, function (err, results, fields) {
@@ -64,10 +84,16 @@ app.get("/", function (request, response) {
 app.post("/auth", function (request, response) {
   const username = request.body.username;
   const password = request.body.password;
-  if (username && password && isUserNameValid(username) && isPasswordValid(password)) {
+  if (
+    username &&
+    password &&
+    isUserNameValid(username) &&
+    isPasswordValid(password)
+  ) {
+    let hashedPassword = hashPassword(username, password);
     connection.query(
       "SELECT * FROM accounts WHERE username = ? AND password = ?",
-      [username, password],
+      [username, hashedPassword],
       function (error, results, fields) {
         if (results.length > 0) {
           request.session.loggedin = true;
@@ -84,18 +110,6 @@ app.post("/auth", function (request, response) {
     response.end();
   }
 });
-
-function isPasswordValid(password: string): boolean {
-  const regex = new RegExp(
-    "^(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#$%^&*])(?=.{8,})"
-  );
-  return regex.test(password);
-}
-
-function isUserNameValid(username: string): boolean {
-  let regex = /^[a-zA-Z]+$/;
-  return regex.test(username);
-}
 
 // Handle register
 app.post("/register", function (request, response) {
@@ -127,9 +141,10 @@ app.post("/register", function (request, response) {
                     !@#$%^&* but no spaces`);
             response.end();
           } else {
+            let hashedPassword = hashPassword(username, password);
             let query =
               "INSERT INTO `accounts` (`username`, `password`) VALUES ('";
-            query += username + "', '" + password + "');";
+            query += username + "', '" + hashedPassword + "');";
             connection.query(query, function (error, results) {
               if (error) {
                 response.send("Error: " + error);
