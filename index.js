@@ -21,11 +21,12 @@ function isUserNameValid(username) {
   return regex.test(username);
 }
 
+function hashString(value) {
+  return crypto.createHash("sha512").update(value).digest("hex");
+}
+
 function hashPassword(username, password) {
-  return crypto
-    .createHash("sha512")
-    .update(username + password)
-    .digest("hex");
+  return hashString(username + password);
 }
 
 // Establish DB connection
@@ -47,7 +48,8 @@ connection.query(deleteTable, function (err, results, fields) {
 
 const createTable = `CREATE TABLE \`accounts\` (
         \`username\` varchar(50) NOT NULL,
-        \`password\` varchar(512) NOT NULL
+        \`password\` varchar(512) NOT NULL,
+        \`answer\` varchar(512) NOT NULL
       ) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8;`;
 
 connection.query(createTable, function (err, results, fields) {
@@ -74,10 +76,63 @@ app.use(
 );
 app.use(bodyParser.urlencoded({ extended: true }));
 app.use(bodyParser.json());
+app.use(express.static(__dirname));
 
 // Serve the page
 app.get("/", function (request, response) {
-  response.sendFile(path.join(__dirname + "/login.html"));
+  response.sendFile(path.join(__dirname + "/index.html"));
+});
+
+// Reset password
+app.get("/reset", function (request, response) {
+  response.sendFile(path.join(__dirname + "/html/reset_password.html"));
+});
+
+// Handle reset password
+app.post("/reset_password", function (request, response) {
+  const username = request.body.username;
+  const password = request.body.password;
+  const answer = request.body.answer;
+  if (
+    username &&
+    password &&
+    answer &&
+    isUserNameValid(username) &&
+    isPasswordValid(password) &&
+    isUserNameValid(answer) &&
+    answer.length < 512
+  ) {
+    let hashedAnswer = hashString(answer);
+    connection.query(
+      "SELECT * FROM accounts WHERE username = ? AND answer = ?",
+      [username, hashedAnswer],
+      function (error, results, fields) {
+        if (results.length > 0) {
+          let hashedPassword = hashPassword(username, password);
+          let query =
+            "INSERT INTO `accounts` (`username`, `password`, `answer`) VALUES ('";
+          query +=
+            username + "', '" + hashedPassword + "', '" + hashedAnswer + "');";
+          connection.query(query, function (error, results) {
+            if (error) {
+              response.send("Error: " + error);
+            } else if (results) {
+              response.send("Password Reset");
+            } else {
+              response.send("Failed to reset password!");
+            }
+            response.end();
+          });
+        } else {
+          response.send("Incorrect Username and/or Secret Answer!");
+          response.end();
+        }
+      }
+    );
+  } else {
+    response.send("Please enter a valid username, password, and secret answer");
+    response.send();
+  }
 });
 
 // Handle submit
@@ -117,11 +172,28 @@ app.post("/register", function (request, response) {
   // Validate username contains characters only
   const onlyChar = isUserNameValid(username);
   const password = request.body.password;
-  if (!(username && password && username.length >= 1 && password.length >= 1)) {
-    response.send("Please enter Username and Password!");
+  const answer = request.body.answer;
+  // Validate answer contains characters only
+  const onlyCharAnswer = isUserNameValid(answer);
+  if (
+    !(
+      username &&
+      password &&
+      answer &&
+      username.length >= 1 &&
+      password.length >= 1 &&
+      answer.length >= 1
+    )
+  ) {
+    response.send("Please enter Username and Password and the secret answer!");
     response.end();
   } else if (!onlyChar) {
     response.send("Username can only contain characters");
+    response.end();
+  } else if (!onlyCharAnswer || answer.length >= 512) {
+    response.send(
+      "The secret answer can only contain characters and be less than 512 characters long"
+    );
     response.end();
   } else {
     // Check if the username exists already
@@ -142,9 +214,16 @@ app.post("/register", function (request, response) {
             response.end();
           } else {
             let hashedPassword = hashPassword(username, password);
+            let hashedAnswer = hashString(answer);
             let query =
-              "INSERT INTO `accounts` (`username`, `password`) VALUES ('";
-            query += username + "', '" + hashedPassword + "');";
+              "INSERT INTO `accounts` (`username`, `password`, `answer`) VALUES ('";
+            query +=
+              username +
+              "', '" +
+              hashedPassword +
+              "', '" +
+              hashedAnswer +
+              "');";
             connection.query(query, function (error, results) {
               if (error) {
                 response.send("Error: " + error);
