@@ -23,15 +23,20 @@ function createConnection() {
   });
 }
 
+function handleConnectionError(con) {
+  con.on("error", function (err) {
+    console.log(err.code);
+    if (err.code == "PROTOCOL_CONNECTION_LOST") {
+      connection = createConnection();
+      handleConnectionError(connection);
+    }
+  });
+}
+
 // Establish DB connection
 let connection = createConnection();
 
-connection.on("error", function (err) {
-  console.log(err.code);
-  if (err.code == "PROTOCOL_CONNECTION_LOST") {
-    connection = createConnection();
-  }
-});
+handleConnectionError(connection);
 
 sql.initializeTable(connection);
 sql.initializeMessageTable(connection);
