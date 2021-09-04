@@ -23,13 +23,30 @@ function initializeMessageTable(connection) {
 
 function insertMessage(connection, username, title, message) {
   //TODO add encryption to the message
-  let query = "INSERT INTO `messages` (`username`, `title`, `message`) VALUES ('";
+  let query =
+    "INSERT INTO `messages` (`username`, `title`, `message`) VALUES ('";
   query += username + "', '" + title + "', '" + message + "');";
   connection.query(query, function (error) {
     if (error) {
       console.error("Error: " + error);
     }
   });
+}
+
+function readTitles(connection, username, response) {
+  connection.query(
+    "SELECT title FROM messages WHERE username = ?",
+    [username],
+    function (error, results) {
+      if (error) {
+        console.error(error);
+      } else {
+        console.log(results);
+        let messages = results.map((result) => result.title);
+        response.render("message.html", { messages: messages });
+      }
+    }
+  );
 }
 
 function handleSendmessage(connection, request, response) {
@@ -56,4 +73,8 @@ function handleSendmessage(connection, request, response) {
   );
 }
 
-module.exports = { handleSendmessage, initializeMessageTable };
+module.exports = {
+  handleSendmessage,
+  initializeMessageTable,
+  readTitles,
+};

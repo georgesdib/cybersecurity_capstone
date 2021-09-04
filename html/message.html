@@ -14,5 +14,10 @@
     </div>
     <a href="/send_message">Send new message</a>
     <h1>Your messages</h1>
+    <ul>
+      <% for(var i=0; i<messages.length; i++) {%>
+        <li><%= messages[i] %></li>
+      <% } %>
+    </ul>
   </body>
 </html>

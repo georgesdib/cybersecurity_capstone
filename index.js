@@ -4,7 +4,7 @@ const session = require("express-session");
 const bodyParser = require("body-parser");
 const path = require("path");
 const crypto = require("crypto-js");
-const helpers = require('./src/helpers');
+const helpers = require("./src/message");
 
 require("dotenv").config({ path: "./.env" });
 
@@ -59,7 +59,8 @@ app.get("/send_message", function (request, response) {
 app.get("/home", function (request, response) {
   if (request.session.loggedin) {
     //response.send("Welcome back, " + request.session.username + "!");
-    response.sendFile(path.join(__dirname + "/html/message.html"));
+    //response.sendFile(path.join(__dirname + "/html/message.html"));
+    helpers.readTitles(connection, request.session.username, response);
   } else {
     response.send(
       'Please login to view this page! <a href="/index.html">Login</a>'
@@ -130,6 +131,13 @@ function initializeSession() {
   app.use(bodyParser.urlencoded({ extended: true }));
   app.use(bodyParser.json());
   app.use(express.static(__dirname));
+
+  // Set EJS View Engine**
+  app.set("view engine", "ejs");
+  // Set HTML engine**
+  app.engine("html", require("ejs").renderFile);
+  //set directory
+  app.set("views", __dirname + "/html/");
 }
 
 function resetPassword(request, response) {
