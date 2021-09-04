@@ -4,6 +4,12 @@ This is the capstone project of the coursera cybersecurity specialisation. I hav
 
 https://georges-cybersecurity-capstone.herokuapp.com
 
+I am on the free tier of Heroku, so the server could go down, if that happens, you can deploy it locally via:
+
+`npm start`
+
+And then open up http://localhost:5000
+
 The project is coded in nodejs using expressjs, and uses sql for the database.
 The user first has to register, where the user would input their name, password, and an answer to a secret question in order to be able to reset the password.
 
