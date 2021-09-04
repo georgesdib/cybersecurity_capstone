@@ -3,31 +3,12 @@ const express = require("express");
 const session = require("express-session");
 const bodyParser = require("body-parser");
 const path = require("path");
-const crypto = require("crypto");
+const crypto = require("crypto-js");
+const helpers = require('./src/helpers');
 
 require("dotenv").config({ path: "./.env" });
 
 const PORT = process.env.PORT || 5000;
-
-function isPasswordValid(password) {
-  const regex = new RegExp(
-    "^(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#$%^&*])(?=.{8,})"
-  );
-  return regex.test(password);
-}
-
-function isUserNameValid(username) {
-  let regex = /^[a-zA-Z]+$/;
-  return regex.test(username);
-}
-
-function hashString(value) {
-  return crypto.createHash("sha512").update(value).digest("hex");
-}
-
-function hashPassword(username, password) {
-  return hashString(username + password);
-}
 
 // Establish DB connection
 const connection = mysql.createConnection({
@@ -37,66 +18,126 @@ const connection = mysql.createConnection({
   database: process.env.DATABASE,
 });
 
-// TODO remove that after deployment
-// Initialize DB
-const deleteTable = "DROP TABLE accounts";
-connection.query(deleteTable, function (err, results, fields) {
-  if (err) {
-    console.log(err.message);
-  }
-});
-
-const createTable = `CREATE TABLE \`accounts\` (
-        \`username\` varchar(50) NOT NULL,
-        \`password\` varchar(512) NOT NULL,
-        \`answer\` varchar(512) NOT NULL
-      ) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8;`;
-
-connection.query(createTable, function (err, results, fields) {
-  if (err) {
-    console.log(err.message);
-  }
-});
+initializeTable();
+helpers.initializeMessageTable(connection);
 
 // Launch express server
 const app = express();
 
-// TODO test better the cookie expiry
-app.use(
-  session({
-    secret: process.env.COOKIE_SECRET,
-    resave: true,
-    saveUninitialized: false,
-    cookie: {
-      //secure: true,
-      maxAge: 3600000, // 1hour
-      sameSite: true,
-    },
-  })
-);
-app.use(bodyParser.urlencoded({ extended: true }));
-app.use(bodyParser.json());
-app.use(express.static(__dirname));
+initializeSession();
 
 // Serve the page
 app.get("/", function (request, response) {
   response.sendFile(path.join(__dirname + "/index.html"));
 });
 
-// Reset password
 app.get("/reset", function (request, response) {
   response.sendFile(path.join(__dirname + "/html/reset_password.html"));
 });
 
-// Handle reset password
-app.post("/reset_password", function (request, response) {
+app.get("/register_page", function (request, response) {
+  response.sendFile(path.join(__dirname + "/html/register.html"));
+});
+
+app.post("/reset_password", resetPassword);
+
+app.post("/auth", handleAuth);
+
+app.post("/register", handleRegister);
+
+app.post("/logoff", handleLogoff);
+
+app.post("/send_message_form", function (request, response) {
+  helpers.handleSendmessage(connection, request, response);
+});
+
+app.get("/send_message", function (request, response) {
+  response.sendFile(path.join(__dirname + "/html/send_message.html"));
+});
+
+// Back to home page
+app.get("/home", function (request, response) {
+  if (request.session.loggedin) {
+    //response.send("Welcome back, " + request.session.username + "!");
+    response.sendFile(path.join(__dirname + "/html/message.html"));
+  } else {
+    response.send(
+      'Please login to view this page! <a href="/index.html">Login</a>'
+    );
+    response.end();
+  }
+});
+
+app.listen(PORT);
+
+function isPasswordValid(password) {
+  const regex = new RegExp(
+    "^(?=.*[a-z])(?=.*[A-Z])(?=.*[0-9])(?=.*[!@#$%^&*])(?=.{8,})"
+  );
+  return regex.test(password);
+}
+
+function isUserNameValid(username) {
+  let regex = /^[a-zA-Z]+$/; //characters only
+  return username && username.length >= 1 && regex.test(username);
+}
+
+function hashString(value) {
+  return crypto.SHA3(value).toString(crypto.enc.Hex);
+}
+
+function hashPassword(username, password) {
+  return hashString(username + password);
+}
+
+function initializeTable() {
+  // TODO remove that after deployment
+  // Initialize DB
+  /*const deleteTable = "DROP TABLE accounts";
+  connection.query(deleteTable, function (err, results, fields) {
+    if (err) {
+      console.log(err.message);
+    }
+  });*/
+
+  const createTable = `CREATE TABLE IF NOT EXISTS \`accounts\` (
+        \`username\` varchar(50) NOT NULL,
+        \`password\` varchar(512) NOT NULL,
+        \`answer\` varchar(512) NOT NULL
+      ) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8;`;
+
+  connection.query(createTable, function (err, results, fields) {
+    if (err) {
+      console.log(err.message);
+    }
+  });
+}
+
+function initializeSession() {
+  // TODO test better the cookie expiry
+  app.use(
+    session({
+      secret: process.env.COOKIE_SECRET,
+      resave: true,
+      saveUninitialized: false,
+      cookie: {
+        //secure: true,
+        maxAge: 3600000, // 1hour
+        sameSite: true,
+      },
+    })
+  );
+  app.use(bodyParser.urlencoded({ extended: true }));
+  app.use(bodyParser.json());
+  app.use(express.static(__dirname));
+}
+
+function resetPassword(request, response) {
   const username = request.body.username;
   const password = request.body.password;
   const answer = request.body.answer;
   if (
-    username &&
     password &&
-    answer &&
     isUserNameValid(username) &&
     isPasswordValid(password) &&
     isUserNameValid(answer) &&
@@ -108,21 +149,30 @@ app.post("/reset_password", function (request, response) {
       [username, hashedAnswer],
       function (error, results, fields) {
         if (results.length > 0) {
-          let hashedPassword = hashPassword(username, password);
-          let query =
-            "INSERT INTO `accounts` (`username`, `password`, `answer`) VALUES ('";
-          query +=
-            username + "', '" + hashedPassword + "', '" + hashedAnswer + "');";
-          connection.query(query, function (error, results) {
-            if (error) {
-              response.send("Error: " + error);
-            } else if (results) {
-              response.send("Password Reset");
-            } else {
-              response.send("Failed to reset password!");
-            }
+          if (error) {
+            response.send("Error: " + error);
             response.end();
-          });
+          } else {
+            let query =
+              "INSERT INTO `accounts` (`username`, `password`, `answer`) VALUES ('";
+            query +=
+              username +
+              "', '" +
+              hashPassword(username, password) +
+              "', '" +
+              hashedAnswer +
+              "');";
+            connection.query(query, function (error, results) {
+              if (error) {
+                response.send("Error: " + error);
+              } else if (results) {
+                response.send("Password Reset");
+              } else {
+                response.send("Failed to reset password!");
+              }
+              response.end();
+            });
+          }
         } else {
           response.send("Incorrect Username and/or Secret Answer!");
           response.end();
@@ -133,24 +183,20 @@ app.post("/reset_password", function (request, response) {
     response.send("Please enter a valid username, password, and secret answer");
     response.send();
   }
-});
+}
 
-// Handle submit
-app.post("/auth", function (request, response) {
+function handleAuth(request, response) {
   const username = request.body.username;
   const password = request.body.password;
-  if (
-    username &&
-    password &&
-    isUserNameValid(username) &&
-    isPasswordValid(password)
-  ) {
+  if (password && isUserNameValid(username) && isPasswordValid(password)) {
     let hashedPassword = hashPassword(username, password);
     connection.query(
       "SELECT * FROM accounts WHERE username = ? AND password = ?",
       [username, hashedPassword],
       function (error, results, fields) {
-        if (results.length > 0) {
+        if (error) {
+          response.send("Error: " + error);
+        } else if (results.length > 0) {
           request.session.loggedin = true;
           request.session.username = username;
           response.redirect("/home");
@@ -164,33 +210,25 @@ app.post("/auth", function (request, response) {
     response.send("Please enter a valid Username and Password!");
     response.end();
   }
-});
+}
 
-// Handle register
-app.post("/register", function (request, response) {
+function handleRegister(request, response) {
   const username = request.body.username;
-  // Validate username contains characters only
-  const onlyChar = isUserNameValid(username);
+  const userValid = isUserNameValid(username);
   const password = request.body.password;
   const answer = request.body.answer;
-  // Validate answer contains characters only
-  const onlyCharAnswer = isUserNameValid(answer);
+  const answerValid = isUserNameValid(answer);
   if (
     !(
-      username &&
+      userValid &&
       password &&
-      answer &&
-      username.length >= 1 &&
+      answerValid &&
       password.length >= 1 &&
-      answer.length >= 1
+      answer.length < 512
     )
   ) {
     response.send("Please enter Username and Password and the secret answer!");
-    response.end();
-  } else if (!onlyChar) {
     response.send("Username can only contain characters");
-    response.end();
-  } else if (!onlyCharAnswer || answer.length >= 512) {
     response.send(
       "The secret answer can only contain characters and be less than 512 characters long"
     );
@@ -201,34 +239,38 @@ app.post("/register", function (request, response) {
       "SELECT * FROM accounts WHERE username = ?",
       [username],
       function (error, results) {
-        if (results.length > 0) {
-          response.send("Username already exists, maybe you meant to login?");
+        if (error) {
+          response.send("Error: " + error);
+          response.end();
+        } else if (results.length > 0) {
+          response.send(
+            'Username already exists, maybe you meant to login? <a href="/index.html">Login</a>'
+          );
           response.end();
         } else {
           // Is password secure enough?
-          const passValid = isPasswordValid(password);
-          if (!passValid) {
+          if (!isPasswordValid(password)) {
             response.send(`Password needs to be minimum 8 characters and contains at least
                     1 lower case, 1 upper case, 1 number, and at least one special character from
                     !@#$%^&* but no spaces`);
             response.end();
           } else {
-            let hashedPassword = hashPassword(username, password);
-            let hashedAnswer = hashString(answer);
             let query =
               "INSERT INTO `accounts` (`username`, `password`, `answer`) VALUES ('";
             query +=
               username +
               "', '" +
-              hashedPassword +
+              hashPassword(username, password) +
               "', '" +
-              hashedAnswer +
+              hashString(answer) +
               "');";
             connection.query(query, function (error, results) {
               if (error) {
                 response.send("Error: " + error);
               } else if (results) {
-                response.send("Username registered");
+                response.send(
+                  'Username registered <a href="/index.html">Login</a>'
+                );
               } else {
                 response.send("Failed to register!");
               }
@@ -239,16 +281,11 @@ app.post("/register", function (request, response) {
       }
     );
   }
-});
+}
 
-// Back to home page
-app.get("/home", function (request, response) {
-  if (request.session.loggedin) {
-    response.send("Welcome back, " + request.session.username + "!");
-  } else {
-    response.send("Please login to view this page!");
-  }
+function handleLogoff(request, response) {
+  request.session.loggedin = false;
+  request.session.username = null;
+  response.redirect("/");
   response.end();
-});
-
-app.listen(PORT);
+}
