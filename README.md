@@ -10,6 +10,8 @@ I am on the free tier of Heroku, so the server could go down, if that happens, y
 
 And then open up http://localhost:5000
 
+Unfortunately, going down this route will mean you are missing the DB config, you can [email me](mailto:georges.dib@gmail.com)
+
 The project is coded in nodejs using expressjs, and uses sql for the database.
 The user first has to register, where the user would input their name, password, and an answer to a secret question in order to be able to reset the password.
 
