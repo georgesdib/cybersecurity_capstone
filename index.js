@@ -14,12 +14,23 @@ require("dotenv").config({ path: "./.env" });
 
 const PORT = process.env.PORT || 5000;
 
+function createConnection() {
+  return mysql.createConnection({
+    host: process.env.HOST,
+    user: process.env.USERNAME,
+    password: process.env.PASSWORD,
+    database: process.env.DATABASE,
+  });
+}
+
 // Establish DB connection
-const connection = mysql.createConnection({
-  host: process.env.HOST,
-  user: process.env.USERNAME,
-  password: process.env.PASSWORD,
-  database: process.env.DATABASE,
+let connection = createConnection();
+
+connection.on("error", function (err) {
+  console.log(err.code);
+  if (err.code == "PROTOCOL_CONNECTION_LOST") {
+    connection = createConnection();
+  }
 });
 
 sql.initializeTable(connection);
