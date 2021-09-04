@@ -1,3 +1,6 @@
+const { publicEncrypt, privateDecrypt } = require("crypto");
+require("dotenv").config({ path: "./.env" });
+
 function initializeMessageTable(connection) {
   // TODO remove that after deployment
   // Initialize DB
@@ -11,7 +14,7 @@ function initializeMessageTable(connection) {
   const createTable = `CREATE TABLE IF NOT EXISTS \`messages\` (
           \`id\` int NOT NULL AUTO_INCREMENT,
           \`username\` varchar(50) NOT NULL,
-          \`title\` varchar(512) NOT NULL,
+          \`title\` TEXT NOT NULL,
           \`message\` TEXT NOT NULL,
           PRIMARY KEY (\`id\`)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8;`;
@@ -23,29 +26,75 @@ function initializeMessageTable(connection) {
   });
 }
 
-function insertMessage(connection, username, title, message) {
-  //TODO add encryption to the message
-  let query =
-    "INSERT INTO `messages` (`username`, `title`, `message`) VALUES ('";
-  query += username + "', '" + title + "', '" + message + "');";
-  connection.query(query, function (error) {
-    if (error) {
-      console.error("Error: " + error);
-    }
-  });
-}
-
-function readTitles(connection, username, response) {
+function insertMessage(connection, response, username, title, message) {
+  // Get the public key to encrypt
   connection.query(
-    "SELECT title, id FROM messages WHERE username = ?",
+    "SELECT publickey FROM keypairs WHERE username = ?",
     [username],
     function (error, results) {
       if (error) {
-        console.error(error);
+        console.error("Error in encrypting: " + error);
       } else {
-        let messages = results.map((result) => result.title);
-        let links = results.map((result) => "/message?id=" + result.id);
-        response.render("message.html", { messages: messages, links: links, username: username });
+        let key = results[0].publickey;
+        const titleEnc = publicEncrypt(key, Buffer.from(title)).toString(
+          "base64"
+        );
+        const msgEnc = publicEncrypt(key, Buffer.from(message)).toString(
+          "base64"
+        );
+
+        // Now insert into messages DB
+        let query =
+          "INSERT INTO `messages` (`username`, `title`, `message`) VALUES ('";
+        query += username + "', '" + titleEnc + "', '" + msgEnc + "');";
+        connection.query(query, function (error) {
+          if (error) {
+            console.error("Error in saving message: " + error);
+          } else {
+            response.send('Message sent! <a href="/home">Go back</a>');
+            response.end();
+          }
+        });
+      }
+    }
+  );
+}
+
+function readTitles(connection, username, response) {
+  // Get the private key to decrypt
+  connection.query(
+    "SELECT privatekey FROM keypairs WHERE username = ?",
+    [username],
+    function (error, results) {
+      if (error) {
+        console.error("Error in decrypting: " + error);
+      } else {
+        const key = results[0].privatekey;
+        connection.query(
+          "SELECT title, id FROM messages WHERE username = ?",
+          [username],
+          function (error, results) {
+            if (error) {
+              console.error(error);
+            } else {
+              let messages = results.map((result) =>
+                privateDecrypt(
+                  {
+                    key: key,
+                    passphrase: process.env.COOKIE_SECRET,
+                  },
+                  Buffer.from(result.title, "base64")
+                ).toString()
+              );
+              let links = results.map((result) => "/message?id=" + result.id);
+              response.render("message.html", {
+                messages: messages,
+                links: links,
+                username: username,
+              });
+            }
+          }
+        );
       }
     }
   );
@@ -63,11 +112,38 @@ function readMessage(connection, loggedInUser, id, response) {
         const message = results[0].message;
         const userName = results[0].username;
         if (userName == loggedInUser) {
-          response.send("<h1>" + title + "</h1><br>" + message);
+          // Get the private key to decrypt
+          connection.query(
+            "SELECT privatekey FROM keypairs WHERE username = ?",
+            [userName],
+            function (error, results) {
+              if (error) {
+                console.error("Error in decrypting: " + error);
+              } else {
+                let key = results[0].privatekey;
+                const mesDec = privateDecrypt(
+                  {
+                    key: key,
+                    passphrase: process.env.COOKIE_SECRET,
+                  },
+                  Buffer.from(message, "base64")
+                ).toString();
+                const titleDec = privateDecrypt(
+                  {
+                    key: key,
+                    passphrase: process.env.COOKIE_SECRET,
+                  },
+                  Buffer.from(title, "base64")
+                ).toString();
+                response.send("<h1>" + titleDec + "</h1><br>" + mesDec);
+                response.end();
+              }
+            }
+          );
         } else {
           response.send("You are not allowed to view this message");
+          response.end();
         }
-        response.end();
       }
     }
   );
@@ -89,9 +165,7 @@ function handleSendmessage(connection, request, response) {
         response.send("Invalid username");
         response.end();
       } else {
-        insertMessage(connection, to, title, message);
-        response.send('Message sent! <a href="/home">Go back</a>');
-        response.end();
+        insertMessage(connection, response, to, title, message);
       }
     }
   );
@@ -101,5 +175,5 @@ module.exports = {
   handleSendmessage,
   initializeMessageTable,
   readTitles,
-  readMessage
+  readMessage,
 };

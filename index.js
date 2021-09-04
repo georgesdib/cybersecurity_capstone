@@ -3,8 +3,9 @@ const express = require("express");
 const session = require("express-session");
 const bodyParser = require("body-parser");
 const path = require("path");
-const crypto = require("crypto-js");
+const cryptoJS = require("crypto-js");
 const helpers = require("./src/message");
+const { generateKeyPairSync, KeyObject } = require("crypto");
 
 require("dotenv").config({ path: "./.env" });
 
@@ -98,7 +99,7 @@ function isUserNameValid(username) {
 }
 
 function hashString(value) {
-  return crypto.SHA3(value).toString(crypto.enc.Hex);
+  return cryptoJS.SHA3(value).toString(cryptoJS.enc.Hex);
 }
 
 function hashPassword(username, password) {
@@ -108,18 +109,37 @@ function hashPassword(username, password) {
 function initializeTable() {
   // TODO remove that after deployment
   // Initialize DB
-  /*const deleteTable = "DROP TABLE accounts";
+  /*let deleteTable = "DROP TABLE accounts";
+  connection.query(deleteTable, function (err, results, fields) {
+    if (err) {
+      console.log(err.message);
+    }
+  });
+
+  deleteTable = "DROP TABLE keypairs";
   connection.query(deleteTable, function (err, results, fields) {
     if (err) {
       console.log(err.message);
     }
   });*/
 
-  const createTable = `CREATE TABLE IF NOT EXISTS \`accounts\` (
+  let createTable = `CREATE TABLE IF NOT EXISTS \`accounts\` (
         \`username\` varchar(50) NOT NULL,
         \`password\` varchar(512) NOT NULL,
         \`answer\` varchar(512) NOT NULL
       ) ENGINE=InnoDB DEFAULT CHARSET=utf8;`;
+
+  connection.query(createTable, function (err, results, fields) {
+    if (err) {
+      console.log(err.message);
+    }
+  });
+
+  createTable = `CREATE TABLE IF NOT EXISTS \`keypairs\` (
+    \`username\` varchar(50) NOT NULL,
+    \`publickey\` TEXT NOT NULL,
+    \`privatekey\` TEXT NOT NULL
+  ) ENGINE=InnoDB DEFAULT CHARSET=utf8;`;
 
   connection.query(createTable, function (err, results, fields) {
     if (err) {
@@ -234,26 +254,70 @@ function handleAuth(request, response) {
   }
 }
 
+function registerNewUser(connection, response, username, password, answer) {
+  // Generate private/public keypair
+  const { publicKey, privateKey } = generateKeyPairSync("rsa", {
+    modulusLength: 4096,
+    publicKeyEncoding: {
+      type: "spki",
+      format: "pem",
+    },
+    privateKeyEncoding: {
+      type: "pkcs8",
+      format: "pem",
+      cipher: "aes-256-cbc",
+      passphrase: process.env.COOKIE_SECRET,
+    },
+  });
+
+  // Insert the keys into the DB
+  let query =
+    "INSERT INTO `keypairs` (`username`, `privatekey`, `publickey`) VALUES ('";
+
+  query += username + "', '" + privateKey + "', '" + publicKey + "');";
+  KeyObject;
+
+  connection.query(query, function (error, results) {
+    if (error) {
+      response.send("Error: " + error);
+      response.end();
+    } else if (!results) {
+      response.send("Failed to register!");
+      response.end();
+    } else {
+      // Insert the username to the DB
+      query =
+        "INSERT INTO `accounts` (`username`, `password`, `answer`) VALUES ('";
+      query +=
+        username +
+        "', '" +
+        hashPassword(username, password) +
+        "', '" +
+        hashString(answer) +
+        "');";
+      connection.query(query, function (error, results) {
+        if (error) {
+          response.send("Error: " + error);
+        } else if (results) {
+          response.send('Username registered <a href="/index.html">Login</a>');
+        } else {
+          response.send("Failed to register!");
+        }
+        response.end();
+      });
+    }
+  });
+}
+
 function handleRegister(request, response) {
   const username = request.body.username;
   const userValid = isUserNameValid(username);
   const password = request.body.password;
   const answer = request.body.answer;
   const answerValid = isUserNameValid(answer);
-  if (
-    !(
-      userValid &&
-      password &&
-      answerValid &&
-      password.length >= 1 &&
-      answer.length < 512
-    )
-  ) {
+  if (!(userValid && password && answerValid && password.length >= 1)) {
     response.send("Please enter Username and Password and the secret answer!");
-    response.send("Username can only contain characters");
-    response.send(
-      "The secret answer can only contain characters and be less than 512 characters long"
-    );
+    response.send("Username and secret answer can only contain characters");
     response.end();
   } else {
     // Check if the username exists already
@@ -277,27 +341,7 @@ function handleRegister(request, response) {
                     !@#$%^&* but no spaces`);
             response.end();
           } else {
-            let query =
-              "INSERT INTO `accounts` (`username`, `password`, `answer`) VALUES ('";
-            query +=
-              username +
-              "', '" +
-              hashPassword(username, password) +
-              "', '" +
-              hashString(answer) +
-              "');";
-            connection.query(query, function (error, results) {
-              if (error) {
-                response.send("Error: " + error);
-              } else if (results) {
-                response.send(
-                  'Username registered <a href="/index.html">Login</a>'
-                );
-              } else {
-                response.send("Failed to register!");
-              }
-              response.end();
-            });
+            registerNewUser(connection, response, username, password, answer);
           }
         }
       }
