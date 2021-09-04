@@ -1,31 +1,6 @@
 const { publicEncrypt, privateDecrypt } = require("crypto");
 require("dotenv").config({ path: "./.env" });
 
-function initializeMessageTable(connection) {
-  // TODO remove that after deployment
-  // Initialize DB
-  /*const deleteTable = "DROP TABLE messages";
-  connection.query(deleteTable, function (err, results, fields) {
-    if (err) {
-      console.log(err.message);
-    }
-  });*/
-
-  const createTable = `CREATE TABLE IF NOT EXISTS \`messages\` (
-          \`id\` int NOT NULL AUTO_INCREMENT,
-          \`username\` varchar(50) NOT NULL,
-          \`title\` TEXT NOT NULL,
-          \`message\` TEXT NOT NULL,
-          PRIMARY KEY (\`id\`)
-        ) ENGINE=InnoDB DEFAULT CHARSET=utf8;`;
-
-  connection.query(createTable, function (err, results, fields) {
-    if (err) {
-      console.log(err.message);
-    }
-  });
-}
-
 function insertMessage(connection, response, username, title, message) {
   // Get the public key to encrypt
   connection.query(
@@ -173,7 +148,6 @@ function handleSendmessage(connection, request, response) {
 
 module.exports = {
   handleSendmessage,
-  initializeMessageTable,
   readTitles,
   readMessage,
 };

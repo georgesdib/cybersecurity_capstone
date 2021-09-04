@@ -1,11 +1,13 @@
 const mysql = require("mysql");
 const express = require("express");
 const session = require("express-session");
+var MySQLStore = require('express-mysql-session')(session);
 const bodyParser = require("body-parser");
 const path = require("path");
 const cryptoJS = require("crypto-js");
-const helpers = require("./src/message");
+const messageMod = require("./src/message");
 const dbdump = require("./src/dbdump");
+const sql = require("./src/sql");
 const { generateKeyPairSync, KeyObject } = require("crypto");
 
 require("dotenv").config({ path: "./.env" });
@@ -20,8 +22,8 @@ const connection = mysql.createConnection({
   database: process.env.DATABASE,
 });
 
-initializeTable();
-helpers.initializeMessageTable(connection);
+sql.initializeTable(connection);
+sql.initializeMessageTable(connection);
 
 // Launch express server
 const app = express();
@@ -85,7 +87,7 @@ app.post("/export_keysdb", function (request, response) {
 
 app.get("/message", function (request, response) {
   if (request.session.loggedin) {
-    helpers.readMessage(
+    messageMod.readMessage(
       connection,
       request.session.username,
       request.query.id,
@@ -98,7 +100,7 @@ app.get("/message", function (request, response) {
 });
 
 app.post("/send_message_form", function (request, response) {
-  helpers.handleSendmessage(connection, request, response);
+  messageMod.handleSendmessage(connection, request, response);
 });
 
 app.get("/send_message", function (request, response) {
@@ -108,9 +110,7 @@ app.get("/send_message", function (request, response) {
 // Back to home page
 app.get("/home", function (request, response) {
   if (request.session.loggedin) {
-    //response.send("Welcome back, " + request.session.username + "!");
-    //response.sendFile(path.join(__dirname + "/html/message.html"));
-    helpers.readTitles(connection, request.session.username, response);
+    messageMod.readTitles(connection, request.session.username, response);
   } else {
     response.send(
       'Please login to view this page! <a href="/index.html">Login</a>'
@@ -141,52 +141,19 @@ function hashPassword(username, password) {
   return hashString(username + password);
 }
 
-function initializeTable() {
-  // TODO remove that after deployment
-  // Initialize DB
-  /*let deleteTable = "DROP TABLE accounts";
-  connection.query(deleteTable, function (err, results, fields) {
-    if (err) {
-      console.log(err.message);
-    }
-  });
-
-  deleteTable = "DROP TABLE keypairs";
-  connection.query(deleteTable, function (err, results, fields) {
-    if (err) {
-      console.log(err.message);
-    }
-  });*/
-
-  let createTable = `CREATE TABLE IF NOT EXISTS \`accounts\` (
-        \`username\` varchar(50) NOT NULL,
-        \`password\` varchar(512) NOT NULL,
-        \`answer\` varchar(512) NOT NULL
-      ) ENGINE=InnoDB DEFAULT CHARSET=utf8;`;
-
-  connection.query(createTable, function (err, results, fields) {
-    if (err) {
-      console.log(err.message);
-    }
-  });
-
-  createTable = `CREATE TABLE IF NOT EXISTS \`keypairs\` (
-    \`username\` varchar(50) NOT NULL,
-    \`publickey\` TEXT NOT NULL,
-    \`privatekey\` TEXT NOT NULL
-  ) ENGINE=InnoDB DEFAULT CHARSET=utf8;`;
-
-  connection.query(createTable, function (err, results, fields) {
-    if (err) {
-      console.log(err.message);
-    }
-  });
-}
-
 function initializeSession() {
-  // TODO test better the cookie expiry
+  const options = {
+    host: process.env.HOST,
+    user: process.env.USERNAME,
+    password: process.env.PASSWORD,
+    database: process.env.DATABASE
+  };
+  
+  const  sessionStore = new MySQLStore(options);
+
   app.use(
     session({
+      store: sessionStore,
       secret: process.env.COOKIE_SECRET,
       resave: true,
       saveUninitialized: false,
