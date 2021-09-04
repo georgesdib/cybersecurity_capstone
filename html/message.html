@@ -6,7 +6,7 @@
     <link rel="stylesheet" type="text/css" href="html/style.css" />
   </head>
   <body>
-    <centre><h1>Message Centre</h1></centre>
+    <centre><h1>Message Centre (User: <%= username %>)</h1></centre>
     <div class="logout-form">
       <form action="logoff" method="POST">
         <input type="submit" value="Log Off" />
@@ -16,7 +16,7 @@
     <h1>Your messages</h1>
     <ul>
       <% for(var i=0; i<messages.length; i++) {%>
-        <li><%= messages[i] %></li>
+        <li><a href=<%= links[i]%>><%= messages[i] %></a></li>
       <% } %>
     </ul>
   </body>

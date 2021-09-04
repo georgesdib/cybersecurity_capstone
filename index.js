@@ -47,6 +47,20 @@ app.post("/register", handleRegister);
 
 app.post("/logoff", handleLogoff);
 
+app.get("/message", function (request, response) {
+  if (request.session.loggedin) {
+    helpers.readMessage(
+      connection,
+      request.session.username,
+      request.query.id,
+      response
+    );
+  } else {
+    response.send("You need to be logged in with the right account");
+    response.end();
+  }
+});
+
 app.post("/send_message_form", function (request, response) {
   helpers.handleSendmessage(connection, request, response);
 });
@@ -105,7 +119,7 @@ function initializeTable() {
         \`username\` varchar(50) NOT NULL,
         \`password\` varchar(512) NOT NULL,
         \`answer\` varchar(512) NOT NULL
-      ) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8;`;
+      ) ENGINE=InnoDB DEFAULT CHARSET=utf8;`;
 
   connection.query(createTable, function (err, results, fields) {
     if (err) {

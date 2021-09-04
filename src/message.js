@@ -9,10 +9,12 @@ function initializeMessageTable(connection) {
   });*/
 
   const createTable = `CREATE TABLE IF NOT EXISTS \`messages\` (
+          \`id\` int NOT NULL AUTO_INCREMENT,
           \`username\` varchar(50) NOT NULL,
           \`title\` varchar(512) NOT NULL,
-          \`message\` TEXT NOT NULL
-        ) ENGINE=InnoDB AUTO_INCREMENT=2 DEFAULT CHARSET=utf8;`;
+          \`message\` TEXT NOT NULL,
+          PRIMARY KEY (\`id\`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8;`;
 
   connection.query(createTable, function (err, results, fields) {
     if (err) {
@@ -35,15 +37,37 @@ function insertMessage(connection, username, title, message) {
 
 function readTitles(connection, username, response) {
   connection.query(
-    "SELECT title FROM messages WHERE username = ?",
+    "SELECT title, id FROM messages WHERE username = ?",
     [username],
     function (error, results) {
       if (error) {
         console.error(error);
       } else {
-        console.log(results);
         let messages = results.map((result) => result.title);
-        response.render("message.html", { messages: messages });
+        let links = results.map((result) => "/message?id=" + result.id);
+        response.render("message.html", { messages: messages, links: links, username: username });
+      }
+    }
+  );
+}
+
+function readMessage(connection, loggedInUser, id, response) {
+  connection.query(
+    "SELECT title, message, username FROM messages WHERE id = ?",
+    [id],
+    function (error, results) {
+      if (error) {
+        console.error(error);
+      } else {
+        const title = results[0].title;
+        const message = results[0].message;
+        const userName = results[0].username;
+        if (userName == loggedInUser) {
+          response.send("<h1>" + title + "</h1><br>" + message);
+        } else {
+          response.send("You are not allowed to view this message");
+        }
+        response.end();
       }
     }
   );
@@ -66,7 +90,7 @@ function handleSendmessage(connection, request, response) {
         response.end();
       } else {
         insertMessage(connection, to, title, message);
-        response.send("Message sent!");
+        response.send('Message sent! <a href="/home">Go back</a>');
         response.end();
       }
     }
@@ -77,4 +101,5 @@ module.exports = {
   handleSendmessage,
   initializeMessageTable,
   readTitles,
+  readMessage
 };
