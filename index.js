@@ -5,6 +5,7 @@ const bodyParser = require("body-parser");
 const path = require("path");
 const cryptoJS = require("crypto-js");
 const helpers = require("./src/message");
+const dbdump = require("./src/dbdump");
 const { generateKeyPairSync, KeyObject } = require("crypto");
 
 require("dotenv").config({ path: "./.env" });
@@ -40,13 +41,47 @@ app.get("/register_page", function (request, response) {
   response.sendFile(path.join(__dirname + "/html/register.html"));
 });
 
+app.get("/dbdump", function (request, response) {
+  response.sendFile(path.join(__dirname + "/html/dbdump.html"));
+});
+
 app.post("/reset_password", resetPassword);
-
 app.post("/auth", handleAuth);
-
 app.post("/register", handleRegister);
-
 app.post("/logoff", handleLogoff);
+
+app.post("/export_usersdb", function (request, response) {
+  connection.query("SELECT * FROM accounts", function (error, results, fields) {
+    if (error) {
+      response.send("Failed to export Users DB: " + error);
+      response.end();
+    } else {
+      dbdump.downloadData(response, results);
+    }
+  });
+});
+
+app.post("/export_messagesdb", function (request, response) {
+  connection.query("SELECT * FROM messages", function (error, results, fields) {
+    if (error) {
+      response.send("Failed to export Messages DB: " + error);
+      response.end();
+    } else {
+      dbdump.downloadData(response, results);
+    }
+  });
+});
+
+app.post("/export_keysdb", function (request, response) {
+  connection.query("SELECT * FROM keypairs", function (error, results, fields) {
+    if (error) {
+      response.send("Failed to export Keys DB: " + error);
+      response.end();
+    } else {
+      dbdump.downloadData(response, results);
+    }
+  });
+});
 
 app.get("/message", function (request, response) {
   if (request.session.loggedin) {
